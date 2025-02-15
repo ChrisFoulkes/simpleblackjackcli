@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"game/internal/entity"
 	"game/internal/ui"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -16,6 +17,9 @@ type Game struct {
 	running    bool
 	input      string
 }
+
+// Add this new type for our timer messages
+type dealerActionMsg struct{}
 
 func New() *Game {
 	return &Game{
@@ -34,6 +38,20 @@ func (g *Game) Init() tea.Cmd {
 
 func (g *Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case dealerActionMsg:
+		if g.dealerHand.GetTotalValue() < 17 {
+			g.console.Display("\nDealer must draw (below 17)...")
+			card, _ := g.deck.Draw()
+			g.dealerHand.AddCard(card)
+			g.console.Display(fmt.Sprintf("Dealer drew: %s", card.String()))
+			g.console.Display(fmt.Sprintf("Dealer's new total: %d", g.dealerHand.GetTotalValue()))
+			return g, g.startDealerPlay() // Continue with next action
+		} else {
+			g.displayFinalState()
+			g.determineWinner()
+			return g, nil
+		}
+
 	case tea.KeyMsg:
 		// Handle different states
 		if g.console.GetGameState() == ui.StateDrawOption {
@@ -52,10 +70,11 @@ func (g *Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					g.drawAdditionalCard(&g.hand)
 					g.displayGameState()
 					g.checkHandState()
+					return g, nil
 				} else {
-					g.showDealerHand()
+					// Change this line to use showDealerHand
+					return g, g.showDealerHand()
 				}
-				return g, nil
 			}
 			return g, nil
 		}
@@ -170,12 +189,18 @@ func (g *Game) checkHandState() {
 	}
 }
 
-func (g *Game) showDealerHand() {
+// Modify showDealerHand to handle the delayed actions
+func (g *Game) showDealerHand() tea.Cmd {
 	g.dealerInitialDraw()
 	g.displayGameState()
-	g.dealerPlay()
-	g.displayFinalState()
-	g.determineWinner()
+	return g.startDealerPlay()
+}
+
+// New function to start the dealer play sequence
+func (g *Game) startDealerPlay() tea.Cmd {
+	return tea.Tick(1200*time.Millisecond, func(time.Time) tea.Msg {
+		return dealerActionMsg{}
+	})
 }
 
 func (g *Game) dealerInitialDraw() {
@@ -184,16 +209,6 @@ func (g *Game) dealerInitialDraw() {
 		for _, card := range cards {
 			g.dealerHand.AddCard(card)
 		}
-	}
-}
-
-func (g *Game) dealerPlay() {
-	for g.dealerHand.GetTotalValue() < 17 {
-		g.console.Display("\nDealer must draw (below 17)...")
-		card, _ := g.deck.Draw()
-		g.dealerHand.AddCard(card)
-		g.console.Display(fmt.Sprintf("Dealer drew: %s", card.String()))
-		g.console.Display(fmt.Sprintf("Dealer's new total: %d", g.dealerHand.GetTotalValue()))
 	}
 }
 
